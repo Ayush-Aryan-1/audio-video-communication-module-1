@@ -406,6 +406,8 @@ function App() {
               <video
                 autoPlay
                 playsInline
+                muted
+                controls
                 ref={(video) => {
                   if (video && video.srcObject !== stream) {
                     video.srcObject = stream;
