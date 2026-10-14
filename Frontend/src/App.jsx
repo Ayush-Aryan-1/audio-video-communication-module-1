@@ -361,7 +361,7 @@ function App() {
         <h1 className=" text-gray-300 text-2xl font-bold">Minor Project </h1>
         <h2 className=" text-gray-300 text-lg font-semibold">Audio-Video Communication Module</h2>
         
-        <div className="room w-full p-3 m-2 bg-zinc-900 border-5 border-stone-900 rounded-2xl h-175 md:h-150">
+        <div className="room w-full p-3 m-2 bg-zinc-900 border-5 border-stone-900 rounded-2xl h-175 md:h-150 flex">
           <div 
           
           onClick={()=>setIsExpanded(!isExpanded)}
