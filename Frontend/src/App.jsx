@@ -12,18 +12,21 @@ function App() {
   const [cameraError, setCameraError] = useState('');
   //DECLARATIONS
   // signalling 
-  const serverUrl = import.meta.env.VITE_SERVER_URL;
+  const serverUrl = import.meta.env.DEV
+    ? window.location.origin
+    : import.meta.env.VITE_SERVER_URL;
   const socketRef=useRef(null);
   //video audio 
   const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const peerRef = useRef(null);
   const localStreamRef = useRef(null);
-  const remoteUserRef = useRef(null);
   const mediaReadyRef = useRef(null);
-  const pendingCandidatesRef = useRef([]);
   const cameraSwitchInProgressRef = useRef(false);
+  //new
+  const pendingCandidatesRef = useRef(new Map);
+  const peersRef = useRef(new Map());
+  const [remoteStreams,setRemoteStreams]=useState([]);
 
+  
   //video audio connection
   useEffect(() => {
       let cancelled = false;
@@ -44,20 +47,6 @@ function App() {
           if (localVideo) {
             localVideo.srcObject = stream;
           }
-
-          // adding local video on RTC peer 
-          peerRef.current = new RTCPeerConnection({
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-            ],
-          });
-          
-          stream.getTracks().forEach((tracks)=>{
-            peerRef.current.addTrack(tracks,stream);
-          })
-          peerRef.current.ontrack = (e)=>{
-            remoteVideoRef.current.srcObject = e.streams[0];
-          }
       };
 
       mediaReadyRef.current = startCamera();
@@ -69,14 +58,18 @@ function App() {
             localVideo.srcObject = null;
           }
           localStreamRef.current = null;
-          peerRef.current?.close();
-          peerRef.current = null;
-          remoteUserRef.current = null;
-          pendingCandidatesRef.current = [];
+          for(const peer of peersRef.current.values()){
+            peer.close();
+          }
+          peersRef.current.clear();
+          pendingCandidatesRef.current.clear();
+          setRemoteStreams([]);
       };
 
   }, []);
 
+  //camera switching
+  
   const switchCamera = async () => {
     if (cameraSwitchInProgressRef.current) return;
 
@@ -103,16 +96,23 @@ function App() {
         throw new Error('No video track was returned by the selected camera.');
       }
 
-      const videoSender = peerRef.current
-        ?.getSenders()
-        .find((sender) => sender.track?.kind === 'video');
-      if (!videoSender) {
-        throw new Error('The video connection is not ready.');
+      const videoSenders = [];
+      for (const peer of peersRef.current.values()) {
+        const sender = peer.getSenders().find(
+          (sender) => sender.track?.kind === 'video'
+        );
+        if (sender) {
+          videoSenders.push(sender);
+        }
       }
-
-      await videoSender.replaceTrack(nextVideoTrack);
+      //remote update
+      await Promise.all(videoSenders.map((sender) =>
+          sender.replaceTrack(nextVideoTrack)
+        ));
+      //local update
       localStream.removeTrack(currentVideoTrack);
       localStream.addTrack(nextVideoTrack);
+
       currentVideoTrack.stop();
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = localStream;
@@ -139,54 +139,84 @@ function App() {
     socketRef.current = io(serverUrl, {
         transports: ["websocket"]
     });
-    const addPendingCandidates = async () => {
-      for (const candidate of pendingCandidatesRef.current) {
+
+    //functiionss
+
+    const addPendingCandidates = async (userId ,peer) => {
+      const candidatesOfUser = pendingCandidatesRef.current.get(userId) || [];
+
+      for (const candidate of candidatesOfUser) {
         try {
-          await peerRef.current.addIceCandidate(candidate);
+          await peer.addIceCandidate(candidate);
         } catch (error) {
           console.error("Failed to add queued ICE candidate:", error);
         }
       }
-      pendingCandidatesRef.current = [];
+      pendingCandidatesRef.current.delete(userId);
     };
-    const configurePeerConnection = (peer) => {
+
+    const configurePeerConnection = (peer,userId) => {
       peer.onicecandidate = (e) => {
-        if (e.candidate && remoteUserRef.current) {
+        if (e.candidate && userId) {
           socketRef.current.emit("candidate", {
             candidate: e.candidate,
-            target: remoteUserRef.current
+            target: userId
           });
         }
       };
       peer.ontrack = (e) => {
         console.log("🔥 REMOTE TRACK:", e.streams[0]);
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = e.streams[0];
-        }
+        const stream = e.streams[0];
+        if(!stream) return ;
+
+        setRemoteStreams((previous) => {
+          const exists=previous.some((item)=>
+            item.userId === userId 
+          );
+          if(exists){
+            return previous.map((item)=>
+              item.userId === userId
+              ? { ...item, stream }
+              : item
+            )
+          }
+          return [...previous, { userId, stream }];
+        });
       };
       peer.onconnectionstatechange = () => {
-        console.log("CONNECTION:", peer.connectionState);
+        console.log(`CONNECTION with ${userId}:`, peer.connectionState);
       };
       peer.oniceconnectionstatechange = () => {
         console.log("ICE:", peer.iceConnectionState);
       };
     };
-    const ensurePeerConnection = () => {
-      if (!peerRef.current || peerRef.current.signalingState === "closed") {
-        const peer = new RTCPeerConnection({
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-          ],
-        });
-        localStreamRef.current.getTracks().forEach((track) => {
-          peer.addTrack(track, localStreamRef.current);
-        });
-        peerRef.current = peer;
-        configurePeerConnection(peer);
+    const ensurePeerConnection = (userId) => {
+      const existingPeer = peersRef.current.get(userId);
+      if(existingPeer && existingPeer.signalingState!=="closed") return existingPeer;
+      
+      const peer = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+        ],
+      });
+      configurePeerConnection(peer,userId);
+
+      const localStream = localStreamRef.current;
+      if (!localStream) {
+        throw new Error("Local media stream is not ready");
       }
-      return peerRef.current;
+      localStream.getTracks().forEach((track) => {
+        peer.addTrack(track, localStream);
+      });
+
+
+
+      peersRef.current.set(userId, peer);
+      return peer;
     };
-    configurePeerConnection(peerRef.current);
+
+    //main useeffect work
+
     socketRef.current.on("connect",()=>{
       console.log(`Connected: ${socketRef.current.id}`);
       socketRef.current.emit("join-room","abc123");
@@ -200,25 +230,28 @@ function App() {
     });
     socketRef.current.on("user-left", (userId) => {
       console.log(`User left: ${userId}`);
-      if (remoteUserRef.current === userId) {
-        peerRef.current?.close();
-        peerRef.current = null;
-        remoteUserRef.current = null;
-        pendingCandidatesRef.current = [];
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = null;
+      //clearance
+      const peer = peersRef.current.get(userId);
+
+        if (peer) {
+          peer.close();
+          peersRef.current.delete(userId);
         }
-      }
+
+        pendingCandidatesRef.current.delete(userId);
+
+        setRemoteStreams((previous) =>
+          previous.filter((item) => item.userId !== userId)
+        );
     });
     
     // webRtc connection
 
-    socketRef.current.on("existing-users", (users) => {
+    socketRef.current.on("existing-users", async (users) => {
       console.log("Existing users:", users);
-      users.forEach(async (Id)=>{
+       for (const Id of users){
           try {
-            remoteUserRef.current = Id;
-            const peer = ensurePeerConnection();
+            const peer = ensurePeerConnection(Id);
             //offering 
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
@@ -232,15 +265,16 @@ function App() {
           } catch (error) {
             console.log("Failed to create offer:", error);
           }
-        })
+        }
     });
+    
     socketRef.current.on("offer",async ({offer,from})=>{
 
-      remoteUserRef.current = from;
-      const peer = ensurePeerConnection();
-
+      try {
+      const peer = ensurePeerConnection(from);
       await peer.setRemoteDescription(offer);
-      await addPendingCandidates();
+
+      await addPendingCandidates(from,peer);
 
        const answer = await peer.createAnswer();
        await peer.setLocalDescription(answer);
@@ -249,23 +283,48 @@ function App() {
         answer,
         target:from
       });
+      console.log("answer sent to ", from );
+      
+    }catch(error){
+        console.error("failed to handle offer",error);
+      }
     })
+
+
     socketRef.current.on("answer",async ({answer,from})=>{
-      remoteUserRef.current = from;
-      const peer = ensurePeerConnection();
+      try {
+      const peer = peersRef.current.get(from);
+
+      if (!peer) {
+        console.error("No peer connection found for:", from);
+        return;
+      }
       await peer.setRemoteDescription(answer);
-      await addPendingCandidates();
+      await addPendingCandidates(from,peer);
+
       console.log("connection done with :", from);
+      }catch(error){
+        console.error("answer handling fucked ",error);
+      }
     })
+
+
     //candidate validation
     socketRef.current.on("candidate", async ({ candidate, from }) => {
       try {
-        remoteUserRef.current = from;
-        const peer = ensurePeerConnection();
+        const peer = peersRef.current.get(from);
+        if (!peer) {
+          const queued = pendingCandidatesRef.current.get(from) || [];
+          queued.push(candidate);
+          pendingCandidatesRef.current.set(from, queued);
+          return;
+        }
         if (peer.remoteDescription) {
           await peer.addIceCandidate(candidate);
         } else {
-          pendingCandidatesRef.current.push(candidate);
+          const queued = pendingCandidatesRef.current.get(from) || [];
+          queued.push(candidate);
+          pendingCandidatesRef.current.set(from, queued);
         }
         console.log(`talking with ${from} on`, candidate);
       }catch (error) {
@@ -301,6 +360,9 @@ function App() {
         <h1 className=" text-gray-300 text-2xl font-bold">Minor Project </h1>
         <h2 className=" text-gray-300 text-lg font-semibold">Audio-Video Communication Module</h2>
         <h3 className=" text-gray-300 text-md font-normal"> Developed by: Ayush and Sumit </h3>
+
+        // local video
+        <h1>Our Video</h1>
         <video
             ref={localVideoRef}
             autoPlay
@@ -308,27 +370,55 @@ function App() {
             muted
             playsInline
             className={cameraFacingMode === 'user' ? 'scale-x-[-1]' : ''}
+            class="rounded-lg"
         />
-        <button
-            type="button"
-            onClick={switchCamera}
-            disabled={!cameraReady || cameraSwitching}
-            className="mt-3 rounded bg-blue-600 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-            {cameraSwitching
-              ? 'Switching camera...'
-              : `Switch to ${cameraFacingMode === 'user' ? 'rear' : 'front'} camera`}
-        </button>
-        {cameraError && (
-          <p role="alert" className="mt-2 text-sm text-red-400">
-            {cameraError}
-          </p>
-        )}
-        <video
-            ref={remoteVideoRef}
-            autoPlay
-            controls
-        />
+
+
+        {/* switch button */}
+        <div className='m-4'>
+          <button
+              type="button"
+              onClick={switchCamera}
+              disabled={!cameraReady || cameraSwitching}
+              className="mt-3 rounded bg-blue-600 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" >
+            // button content
+              {cameraSwitching
+                ? 'Switching camera...'
+                : `Switch to ${cameraFacingMode === 'user' ? 'rear' : 'front'} camera`}
+          
+          </button>
+          {cameraError && (
+            <p role="alert" className="mt-2 text-sm text-red-400">
+              {cameraError}
+            </p>
+          )}
+        </div>
+
+
+        // remote Streams
+        <div className="flex flex-wrap justify-center gap-4 mt-4">
+          {remoteStreams.map(({ userId, stream }) => (
+            <div key={userId} className="flex flex-col items-center gap-2">
+              <p className="text-gray-300 text-sm">
+                Participant: {userId}
+              </p>
+
+              <video
+                autoPlay
+                playsInline
+                ref={(video) => {
+                  if (video && video.srcObject !== stream) {
+                    video.srcObject = stream;
+                  }
+                }}
+                className="w-72 rounded-lg"
+              />
+            </div>
+          ))}
+        </div>
+
+
+        //ending
       </div>
     </>
   )
