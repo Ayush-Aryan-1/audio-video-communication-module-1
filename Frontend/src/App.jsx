@@ -54,6 +54,7 @@ async function logIceConnectionType(peer, userId) {
       localCandidate: localCandidate?.candidateType,
       remoteCandidate: remoteCandidate?.candidateType,
     });
+    alert("🚨Using Turn");
   } else {
     console.log(`✅ Direct connection (no TURN relay) with user: ${userId}`, {
       localCandidate: localCandidate?.candidateType,
