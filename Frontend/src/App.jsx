@@ -3,6 +3,25 @@ import {useEffect,useRef,useState} from 'react';
 import './App.css';
 import {io} from "socket.io-client";
 
+const turnUrls = import.meta.env.VITE_TURN_URLS
+  ?.split(',')
+  .map((url) => url.trim())
+  .filter(Boolean) ?? [];
+const turnUsername = import.meta.env.VITE_TURN_USERNAME?.trim();
+const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+if (turnUrls.length > 0 && (!turnUsername || !turnCredential)) {
+  console.error(
+    'TURN URLs are configured, but VITE_TURN_USERNAME and VITE_TURN_CREDENTIAL are required.'
+  );
+}
+
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  ...(turnUrls.length > 0 && turnUsername && turnCredential
+    ? [{ urls: turnUrls, username: turnUsername, credential: turnCredential }]
+    : []),
+];
 
 
 function App() {
@@ -183,21 +202,38 @@ function App() {
           return [...previous, { userId, stream }];
         });
       };
+
       peer.onconnectionstatechange = () => {
         console.log(`CONNECTION with ${userId}:`, peer.connectionState);
       };
       peer.oniceconnectionstatechange = () => {
-        console.log("ICE:", peer.iceConnectionState);
+        console.log(
+          `ICE state with ${userId}:`,
+          peer.iceConnectionState
+        );
+      };
+
+      peer.onicegatheringstatechange = () => {
+        console.log(
+          `ICE gathering with ${userId}:`,
+          peer.iceGatheringState
+        );
+      };
+
+      peer.onsignalingstatechange = () => {
+        console.log(
+          `Signaling with ${userId}:`,
+          peer.signalingState
+        );
       };
     };
+    
     const ensurePeerConnection = (userId) => {
       const existingPeer = peersRef.current.get(userId);
       if(existingPeer && existingPeer.signalingState!=="closed") return existingPeer;
       
       const peer = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-        ],
+        iceServers,
       });
       configurePeerConnection(peer,userId);
 
