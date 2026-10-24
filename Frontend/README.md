@@ -15,9 +15,18 @@ VITE_TURN_CREDENTIAL=temporary-credential
 
 `VITE_TURN_URLS` accepts a comma-separated list. TURN usernames and credentials
 are included in the browser bundle, so use short-lived credentials generated
-for clients rather than a permanent TURN-server secret. Without TURN settings,
-the app falls back to STUN only and some networks will connect signaling but
-fail to pass video.
+for clients rather than a permanent TURN-server secret. These are Vite
+build-time variables: after changing them in the hosting provider, trigger a
+new frontend build and deployment. Setting them only on the signaling backend
+does not configure the browser.
+
+Without valid TURN settings, the app falls back to STUN only and some networks
+will connect signaling but fail to pass video. When troubleshooting, check the
+browser console for `WebRTC ICE configuration` (`turnConfigured` should be
+`true`), local and remote ICE candidates of type `relay`, and `ICE candidate
+gathering failed` errors. Errors such as authentication failures or unreachable
+TURN URLs must be corrected in the TURN service configuration or network
+firewall; a successful Socket.IO connection does not verify TURN.
 
 Serve the frontend over HTTPS in production; browsers require a secure context
 for camera and microphone access. To diagnose a failed media path, inspect the

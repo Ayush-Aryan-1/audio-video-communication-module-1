@@ -23,6 +23,11 @@ const iceServers = [
     : []),
 ];
 
+console.info('WebRTC ICE configuration:', {
+  turnConfigured: iceServers.length > 1,
+  turnServerCount: turnUrls.length,
+});
+
 async function logIceConnectionType(peer, userId) {
   const stats = await peer.getStats();
 
@@ -90,6 +95,8 @@ function App() {
   useEffect(() => {
       let cancelled = false;
       const localVideo = localVideoRef.current;
+      const peers = peersRef.current;
+      const pendingCandidates = pendingCandidatesRef.current;
 
       const startCamera = async () => {
 
@@ -117,11 +124,11 @@ function App() {
             localVideo.srcObject = null;
           }
           localStreamRef.current = null;
-          for(const peer of peersRef.current.values()){
+          for(const peer of peers.values()){
             peer.close();
           }
-          peersRef.current.clear();
-          pendingCandidatesRef.current.clear();
+          peers.clear();
+          pendingCandidates.clear();
           setRemoteStreams([]);
       };
 
@@ -217,11 +224,23 @@ function App() {
     const configurePeerConnection = (peer,userId) => {
       peer.onicecandidate = (e) => {
         if (e.candidate && userId) {
+          console.log(`Local ICE candidate for ${userId}:`, {
+            type: e.candidate.type,
+            protocol: e.candidate.protocol,
+            url: e.candidate.url,
+          });
           socketRef.current.emit("candidate", {
             candidate: e.candidate,
             target: userId
           });
         }
+      };
+      peer.onicecandidateerror = (event) => {
+        console.error(`ICE candidate gathering failed for ${userId}:`, {
+          url: event.url,
+          errorCode: event.errorCode,
+          errorText: event.errorText,
+        });
       };
       peer.ontrack = (e) => {
         console.log("🔥 REMOTE TRACK:", e.streams[0]);
@@ -391,6 +410,15 @@ function App() {
     //candidate validation
     socketRef.current.on("candidate", async ({ candidate, from }) => {
       try {
+        const candidateType = candidate.type ??
+          candidate.candidate?.match(/\btyp\s+(host|srflx|prflx|relay)\b/)?.[1];
+        const candidateProtocol = candidate.protocol ??
+          candidate.candidate?.match(/^\w+\s+\d+\s+(udp|tcp)\s/i)?.[1]?.toLowerCase();
+        console.log(`Remote ICE candidate for ${from}:`, {
+          type: candidateType,
+          protocol: candidateProtocol,
+        });
+
         const peer = peersRef.current.get(from);
         if (!peer) {
           const queued = pendingCandidatesRef.current.get(from) || [];
@@ -405,7 +433,6 @@ function App() {
           queued.push(candidate);
           pendingCandidatesRef.current.set(from, queued);
         }
-        console.log(`talking with ${from} on`, candidate);
       }catch (error) {
         console.error("Failed to add ICE candidate:", error);
       }
@@ -433,7 +460,6 @@ function App() {
 
 
   const [isExpanded,setIsExpanded]=useState(false);
-  const [myControls,setMyControls]=useState(false);
   return (
     < >
       <div className="flex flex-col items-center justify-center min-h-screen bg-black w-full h-full">
