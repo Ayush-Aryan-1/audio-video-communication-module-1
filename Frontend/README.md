@@ -1,16 +1,24 @@
-# React + Vite
+# Frontend deployment
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The app uses WebRTC for media and Socket.IO for signaling. STUN alone cannot
+establish media paths through every NAT or firewall, so production deployments
+should configure a TURN service as a relay fallback.
 
-Currently, two official plugins are available:
+Set these variables in the frontend build environment:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```env
+VITE_SERVER_URL=https://your-signaling-server.example
+VITE_TURN_URLS=turn:your-turn-server.example:3478,turns:your-turn-server.example:5349
+VITE_TURN_USERNAME=temporary-username
+VITE_TURN_CREDENTIAL=temporary-credential
+```
 
-## React Compiler
+`VITE_TURN_URLS` accepts a comma-separated list. TURN usernames and credentials
+are included in the browser bundle, so use short-lived credentials generated
+for clients rather than a permanent TURN-server secret. Without TURN settings,
+the app falls back to STUN only and some networks will connect signaling but
+fail to pass video.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Serve the frontend over HTTPS in production; browsers require a secure context
+for camera and microphone access. To diagnose a failed media path, inspect the
+browser console for the peer's ICE connection state.
