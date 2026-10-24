@@ -23,6 +23,45 @@ const iceServers = [
     : []),
 ];
 
+async function logIceConnectionType(peer, userId) {
+  const stats = await peer.getStats();
+
+  let selectedPair;
+
+  stats.forEach((report) => {
+    if (
+      report.type === "candidate-pair" &&
+      report.state === "succeeded" &&
+      report.nominated
+    ) {
+      selectedPair = report;
+    }
+  });
+
+  if (!selectedPair) {
+    console.log(`⏳ No selected ICE candidate pair yet for ${userId}`);
+    return;
+  }
+
+  const localCandidate = stats.get(selectedPair.localCandidateId);
+  const remoteCandidate = stats.get(selectedPair.remoteCandidateId);
+
+  if (
+    localCandidate?.candidateType === "relay" ||
+    remoteCandidate?.candidateType === "relay"
+  ) {
+    console.log(`👍 TURN SERVER IS WORKING with user: ${userId}`, {
+      localCandidate: localCandidate?.candidateType,
+      remoteCandidate: remoteCandidate?.candidateType,
+    });
+  } else {
+    console.log(`✅ Direct connection (no TURN relay) with user: ${userId}`, {
+      localCandidate: localCandidate?.candidateType,
+      remoteCandidate: remoteCandidate?.candidateType,
+    });
+  }
+}
+
 
 function App() {
   const [cameraFacingMode, setCameraFacingMode] = useState('user');
@@ -205,6 +244,9 @@ function App() {
 
       peer.onconnectionstatechange = () => {
         console.log(`CONNECTION with ${userId}:`, peer.connectionState);
+        if (peer.connectionState === "connected") {
+          logIceConnectionType(peer, userId).catch(console.error);
+        }
       };
       peer.oniceconnectionstatechange = () => {
         console.log(
@@ -227,7 +269,7 @@ function App() {
         );
       };
     };
-    
+
     const ensurePeerConnection = (userId) => {
       const existingPeer = peersRef.current.get(userId);
       if(existingPeer && existingPeer.signalingState!=="closed") return existingPeer;
