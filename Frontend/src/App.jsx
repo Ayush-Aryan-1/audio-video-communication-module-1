@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import './App.css';
 import {io} from "socket.io-client";
-import VideoCall from './video_call';
+import VideoCall from './pages/video_call';
 
 const turnUrls = import.meta.env.VITE_TURN_URLS
   ?.split(',')
