@@ -2,6 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import './App.css';
 import {io} from "socket.io-client";
+import VideoCall from './video_call';
 
 const turnUrls = import.meta.env.VITE_TURN_URLS
   ?.split(',')
@@ -459,80 +460,18 @@ function App() {
   }, [serverUrl])
 
 
-  const [isExpanded,setIsExpanded]=useState(false);
   return (
-    < >
-      <div className="flex flex-col items-center justify-center min-h-screen bg-black w-full h-full">
-        <h1 className=" text-gray-300 text-2xl font-bold">Minor Project </h1>
-        <h2 className=" text-gray-300 text-lg font-semibold">Audio-Video Communication Module</h2>
-        
-        <div className="room w-full p-3 m-2 bg-zinc-900 border-5 border-stone-900 rounded-2xl h-175 md:h-150 flex">
-          <div 
-          
-          onClick={()=>setIsExpanded(!isExpanded)}
-          className= {` local rounded-lg p-3 w-fit 
-          ${isExpanded ? 'max-w-100 sm:max-w-md md:max-w-xl lg:max-w-2xl' 
-           : 'max-w-50 sm:max-w-2xs md:max-w-xs lg:max-w-s'}`}>
-
-            <h1 className='text-teal-200'>Our Video</h1>
-            <video
-                ref={localVideoRef}
-                autoPlay
-                controls={false}
-                muted
-                playsInline
-                className={` ${cameraFacingMode === 'user' ? 'scale-x-[-1]' : ''} rounded-lg w-full shadow-lg`}
-            />
-          </div>
-            {/*remote videos */}
-          <div className="flex flex-wrap justify-center gap-4 mt-4">
-          {remoteStreams.map(({ userId, stream }) => (
-            <div key={userId} className="flex flex-col items-center gap-2">
-              <p className="text-gray-300 text-sm">
-                Participant: {userId}
-              </p>
-
-              <video
-                autoPlay
-                playsInline
-                muted
-                controls
-                ref={(video) => {
-                  if (video && video.srcObject !== stream) {
-                    video.srcObject = stream;
-                  }
-                }}
-                className="w-72 rounded-lg"
-              />
-            </div>
-          ))}
-        </div>
-        </div>
-        
-        {/* switch button */}
-        <div className='m-4'>
-          <button
-              type="button"
-              onClick={switchCamera}
-              disabled={!cameraReady || cameraSwitching}
-              className="mt-3 rounded bg-teal-500 px-4 py-2 font-semibold text-black  disabled:cursor-not-allowed disabled:opacity-50" >
-              {cameraSwitching
-                ? 'Switching camera...'
-                : `Switch to ${cameraFacingMode === 'user' ? 'rear' : 'front'} camera`}
-          
-          </button>
-          {cameraError && (
-            <p role="alert" className="mt-2 text-sm text-red-400">
-              {cameraError}
-            </p>
-          )}
-        </div>
-        <footer className='text-amber-50'>
-          <h2 className=" text-gray-300 text-[11px] font-normal"> Developed by: Ayush and Sumit </h2>
-        </footer>
-      </div>
-    </>
+    <VideoCall
+      localVideoRef={localVideoRef}
+      remoteStreams={remoteStreams}
+      cameraFacingMode={cameraFacingMode}
+      cameraReady={cameraReady}
+      cameraSwitching={cameraSwitching}
+      cameraError={cameraError}
+      onSwitchCamera={switchCamera}
+    />
   )
 }
 
 export default App
+

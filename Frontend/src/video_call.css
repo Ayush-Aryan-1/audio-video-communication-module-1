@@ -1,0 +1,236 @@
+/* ── video_call.css ── */
+/* Minimal, dark video call interface */
+
+.call-root {
+  position: fixed;
+  inset: 0;
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #e4e4e7;
+  overflow: hidden;
+}
+
+/* ── stage (video area) ── */
+
+.call-stage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── solo view (waiting for others) ── */
+
+.solo-view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.solo-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.solo-hint {
+  position: absolute;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: #a1a1aa;
+  letter-spacing: 0.02em;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 6px 16px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ── remote grid ── */
+
+.remote-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 2px;
+}
+
+.remote-grid--1 {
+  grid-template-columns: 1fr;
+}
+
+.remote-grid--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.remote-grid--3 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.remote-grid--3 > :first-child {
+  grid-column: 1 / -1;
+}
+
+.remote-grid--4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.remote-tile {
+  position: relative;
+  background: #18181b;
+  overflow: hidden;
+}
+
+.remote-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remote-label {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fafafa;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── local picture-in-picture ── */
+
+.local-pip {
+  position: absolute;
+  bottom: 88px;
+  right: 16px;
+  width: 120px;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  transition: width 0.25s ease, border-color 0.2s;
+}
+
+.local-pip:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.local-pip--lg {
+  width: 220px;
+}
+
+.local-pip video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── controls bar ── */
+
+.call-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 0 max(16px, env(safe-area-inset-bottom));
+  background: #111;
+}
+
+.ctl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #27272a;
+  color: #fafafa;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.ctl-btn:hover {
+  background: #3f3f46;
+}
+
+.ctl-btn:active {
+  transform: scale(0.93);
+}
+
+.ctl-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ctl-btn--off {
+  background: #ef4444;
+}
+
+.ctl-btn--off:hover {
+  background: #dc2626;
+}
+
+.ctl-btn--end {
+  background: #ef4444;
+}
+
+.ctl-btn--end:hover {
+  background: #dc2626;
+}
+
+/* ── error message ── */
+
+.cam-error {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: #fca5a5;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+
+/* ── mirror ── */
+
+.mirror {
+  transform: scaleX(-1);
+}
+
+/* ── responsive tweaks ── */
+
+@media (max-width: 480px) {
+  .local-pip {
+    width: 90px;
+    bottom: 80px;
+    right: 10px;
+  }
+
+  .local-pip--lg {
+    width: 160px;
+  }
+
+  .ctl-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .call-bar {
+    gap: 10px;
+  }
+}
